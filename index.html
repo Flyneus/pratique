@@ -44,7 +44,7 @@
   }
   form { display: grid; gap: 14px; }
   .row { display: flex; flex-wrap: wrap; gap: 10px; }
-  input[type=text], select {
+  input[type=text], #range, select {
     flex: 1 1 200px;
     padding: 14px 16px;
     font-size: 1rem;
@@ -176,6 +176,7 @@
           <option value="5" selected>Détour max : 5 km</option>
           <option value="10">Détour max : 10 km</option>
         </select>
+        <input type="number" id="range" placeholder="Autonomie restante (km), facultatif" min="1" step="1" aria-label="Autonomie restante en km">
       </div>
       <label class="conso">Consommation <input type="number" id="conso" value="11.8" min="2" max="40" step="0.1"> L/100 km</label>
     </form>
@@ -386,7 +387,23 @@ async function searchRoute(A, B) {
     if (min <= detour) { s._km = min; s._along = along; stations.push(s); }
   }
   stations.sort((a, b) => a[field] - b[field]);
-  render(stations, fuel, `${A.label} → ${B.label}`, detour, 0, 0, true);
+
+  // Autonomie restante : on ne garde que les stations atteignables avant la panne sèche
+  const range = Number($("range").value);
+  let label = `${A.label} → ${B.label}`;
+  let list = stations;
+  if (range > 0) {
+    list = stations.filter((s) => s._along + s._km <= range);
+    if (!list.length) {
+      const first = stations.reduce((m, s) => Math.min(m, s._along), Infinity);
+      setStatus(stations.length
+        ? `⚠️ Aucune station atteignable avec ${range} km d'autonomie : la première est à environ ${Math.round(first)} km du départ.`
+        : `Aucune station ${LABELS[fuel]} trouvée à moins de ${detour} km de l'itinéraire.`);
+      return;
+    }
+    label += ` (stations atteignables avec ${range} km d'autonomie)`;
+  }
+  render(list, fuel, label, detour, 0, 0, true);
 }
 
 async function run(fn) {
