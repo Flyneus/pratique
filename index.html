@@ -116,6 +116,12 @@
   .badge { display: inline-block; margin-left: 6px; padding: 2px 10px; border-radius: 999px; background: var(--orange); color: #fff; font-size: .75rem; font-weight: 800; vertical-align: middle; }
   .price .total { display: block; color: var(--muted); font-size: .82rem; }
   #note { margin: 4px 4px 14px; color: var(--muted); font-size: .85rem; }
+  [hidden] { display: none !important; }
+  .modes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .mode { background: #f1eeff; color: var(--ink); }
+  .mode.on { background: var(--violet); color: #fff; }
+  .conso { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .conso input { width: 90px; padding: 14px 12px; font-size: 1rem; border: 2px solid #e6e1ff; border-radius: 14px; }
   footer { text-align: center; padding: 0 16px 40px; color: var(--muted); font-size: .9rem; }
   footer a { color: var(--violet); }
   @media (max-width: 520px) {
@@ -134,10 +140,19 @@
 <main>
   <div class="panel">
     <form id="form">
-      <div class="row">
+      <div class="modes">
+        <button type="button" class="mode on" data-mode="place">📍 Autour d'un lieu</button>
+        <button type="button" class="mode" data-mode="route">🛣️ Sur un itinéraire</button>
+      </div>
+      <div class="row" id="rowPlace">
         <input type="text" id="place" value="Quimper" placeholder="Ville ou code postal (ex : Lyon, 33000)" autocomplete="off" aria-label="Ville ou code postal">
         <button type="submit">Rechercher</button>
         <button type="button" class="alt" id="geo">📍 Autour de moi</button>
+      </div>
+      <div class="row" id="rowRoute" hidden>
+        <input type="text" id="from" placeholder="Départ (ex : Quimper)" autocomplete="off" aria-label="Départ">
+        <input type="text" id="to" placeholder="Arrivée (ex : Rennes)" autocomplete="off" aria-label="Arrivée">
+        <button type="submit">Rechercher</button>
       </div>
       <div class="chips" role="radiogroup" aria-label="Carburant">
         <label><input type="radio" name="fuel" value="gazole"><span>Gazole</span></label>
@@ -147,7 +162,7 @@
         <label><input type="radio" name="fuel" value="e85" checked><span>E85</span></label>
         <label><input type="radio" name="fuel" value="gplc"><span>GPLc</span></label>
       </div>
-      <div class="row">
+      <div class="row" id="rowRadius">
         <select id="radius" aria-label="Rayon de recherche">
           <option value="5">Rayon : 5 km</option>
           <option value="10">Rayon : 10 km</option>
@@ -155,6 +170,14 @@
           <option value="50">Rayon : 50 km</option>
         </select>
       </div>
+      <div class="row" id="rowDetour" hidden>
+        <select id="detour" aria-label="Détour maximum">
+          <option value="2">Détour max : 2 km</option>
+          <option value="5" selected>Détour max : 5 km</option>
+          <option value="10">Détour max : 10 km</option>
+        </select>
+      </div>
+      <label class="conso">Consommation <input type="number" id="conso" value="11.8" min="2" max="40" step="0.1"> L/100 km</label>
     </form>
   </div>
 
@@ -173,7 +196,8 @@
 const API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records";
 const GEO = "https://api-adresse.data.gouv.fr/search/";
 const TANK = 40; // litres du plein de référence
-const CONS = { gazole: 6, e10: 7, sp95: 7, sp98: 7, e85: 8.75, gplc: 8.5 }; // L/100 km
+const cons = () => Math.max(0, Number($("conso").value) || 0); // L/100 km
+const OSRM = "https://router.project-osrm.org/route/v1/driving";
 const LABELS = { gazole: "Gazole", e10: "SP95-E10", sp95: "SP95", sp98: "SP98", e85: "E85", gplc: "GPLc" };
 
 const $ = (id) => document.getElementById(id);
@@ -214,24 +238,28 @@ function km(lat1, lon1, lat2, lon2) {
   return 12742 * Math.asin(Math.sqrt(a));
 }
 
-function render(stations, fuel, label, radius, lat, lon) {
+function render(stations, fuel, label, radius, lat, lon, isRoute) {
   if (!stations.length) {
-    setStatus(`Aucune station ${LABELS[fuel]} trouvée dans ${radius} km autour de ${label}.`);
+    setStatus(isRoute
+      ? `Aucune station ${LABELS[fuel]} trouvée à moins de ${radius} km de l'itinéraire ${label}.`
+      : `Aucune station ${LABELS[fuel]} trouvée dans ${radius} km autour de ${label}.`);
     return;
   }
   // Coût = plein de 40 L + aller-retour jusqu'à la station (à vol d'oiseau)
   stations.forEach((s) => {
-    s._km = s.geom ? km(lat, lon, s.geom.lat, s.geom.lon) : 0;
+    if (!isRoute) s._km = s.geom ? km(lat, lon, s.geom.lat, s.geom.lon) : 0;
     const price = Number(s[`${fuel}_prix`]);
-    s._cost = price * (TANK + 2 * s._km * CONS[fuel] / 100);
+    s._cost = price * (TANK + 2 * s._km * cons() / 100);
   });
   const best = stations.reduce((a, b) => (a._cost <= b._cost ? a : b));
   const shown = stations.slice(0, 30);
   if (!shown.includes(best)) shown.push(best);
-  setStatus(`${shown.length} stations en ${LABELS[fuel]} autour de ${label}`);
+  setStatus(isRoute
+    ? `${shown.length} stations en ${LABELS[fuel]} sur l'itinéraire ${label}`
+    : `${shown.length} stations en ${LABELS[fuel]} autour de ${label}`);
   const note = $("note");
   note.hidden = false;
-  note.textContent = `⭐ Meilleur rapport distance/prix : ${best.ville} (${best._km.toFixed(1).replace(".", ",")} km, ${best._cost.toFixed(2).replace(".", ",")} € pour un plein de ${TANK} L, trajet aller-retour inclus). Calcul à vol d'oiseau, consommation estimée à ${String(CONS[fuel]).replace(".", ",")} L/100 km.`;
+  note.textContent = `⭐ Meilleur rapport distance/prix : ${best.ville} (${best._km.toFixed(1).replace(".", ",")} km, ${best._cost.toFixed(2).replace(".", ",")} € pour un plein de ${TANK} L, ${isRoute ? "détour aller-retour inclus" : "trajet aller-retour inclus"}). Calcul à vol d'oiseau, consommation de ${String(cons()).replace(".", ",")} L/100 km.`;
   shown.forEach((s) => {
     const i = stations.indexOf(s);
     const li = document.createElement("li");
@@ -252,7 +280,10 @@ function render(stations, fuel, label, radius, lat, lon) {
       h.appendChild(b);
     }
     const p = document.createElement("p");
-    p.textContent = `${s.adresse || ""} · ${s._km.toFixed(1).replace(".", ",")} km`;
+    const dist = s._km.toFixed(1).replace(".", ",");
+    p.textContent = isRoute
+      ? `${s.adresse || ""} · à ${dist} km de la route · km ${Math.round(s._along)} du trajet`
+      : `${s.adresse || ""} · ${dist} km`;
     info.append(h, p);
     const g = s.geom || (s.latitude != null ? { lat: s.latitude / 100000, lon: s.longitude / 100000 } : null);
     if (g) {
@@ -279,7 +310,7 @@ function render(stations, fuel, label, radius, lat, lon) {
     }
     const total = document.createElement("span");
     total.className = "total";
-    total.textContent = `≈ ${s._cost.toFixed(2).replace(".", ",")} € le plein + trajet`;
+    total.textContent = `≈ ${s._cost.toFixed(2).replace(".", ",")} € le plein + ${isRoute ? "détour" : "trajet"}`;
     price.appendChild(total);
 
     li.append(rank, info, price);
@@ -287,13 +318,105 @@ function render(stations, fuel, label, radius, lat, lon) {
   });
 }
 
+// Points de l'itinéraire espacés d'au plus 1 km, avec la distance cumulée depuis le départ
+function densify(coords) {
+  const pts = [{ ...coords[0], along: 0 }];
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const a = coords[i - 1], b = coords[i];
+    const d = km(a.lat, a.lon, b.lat, b.lon);
+    const n = Math.max(1, Math.ceil(d));
+    for (let k = 1; k <= n; k++) {
+      pts.push({ lat: a.lat + (b.lat - a.lat) * k / n, lon: a.lon + (b.lon - a.lon) * k / n, along: total + d * k / n });
+    }
+    total += d;
+  }
+  return pts;
+}
+
+async function searchRoute(A, B) {
+  const fuel = document.querySelector("input[name=fuel]:checked").value;
+  const detour = Number($("detour").value);
+  const field = `${fuel}_prix`;
+
+  setStatus("Calcul de l'itinéraire…");
+  resultsEl.replaceChildren();
+  $("note").hidden = true;
+  const r = await fetch(`${OSRM}/${A.lon},${A.lat};${B.lon},${B.lat}?overview=full&geometries=geojson`);
+  if (!r.ok) throw new Error("Calcul d'itinéraire indisponible");
+  const j = await r.json();
+  if (!j.routes || !j.routes[0]) throw new Error("Aucun itinéraire trouvé");
+  const pts = densify(j.routes[0].geometry.coordinates.map(([lo, la]) => ({ lat: la, lon: lo })));
+  const total = pts[pts.length - 1].along;
+
+  // Points de recherche le long de la route (cercles qui se recouvrent), 80 requêtes maximum
+  const step = Math.max(detour * 1.6, total / 80);
+  const samples = [];
+  let next = 0;
+  for (const p of pts) if (p.along >= next) { samples.push(p); next = p.along + step; }
+  samples.push(pts[pts.length - 1]);
+
+  setStatus(`Itinéraire de ${Math.round(total)} km : recherche des stations…`);
+  const byId = new Map();
+  let ok = 0, i = 0;
+  async function worker() {
+    while (i < samples.length) {
+      const p = samples[i++];
+      const where = `within_distance(geom, geom'POINT(${p.lon} ${p.lat})', ${detour}km) and ${field} is not null`;
+      try {
+        const res = await fetch(`${API}?where=${encodeURIComponent(where)}&order_by=${field}&limit=20`);
+        if (!res.ok) continue;
+        const d = await res.json();
+        ok++;
+        for (const s of d.results || []) byId.set(s.id, s);
+      } catch (e) { /* on continue avec les autres points */ }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, worker));
+  if (!ok) throw new Error("L'API des carburants ne répond pas");
+
+  const stations = [];
+  for (const s of byId.values()) {
+    if (!s.geom) continue;
+    let min = Infinity, along = 0;
+    for (const p of pts) {
+      const d = km(s.geom.lat, s.geom.lon, p.lat, p.lon);
+      if (d < min) { min = d; along = p.along; }
+    }
+    if (min <= detour) { s._km = min; s._along = along; stations.push(s); }
+  }
+  stations.sort((a, b) => a[field] - b[field]);
+  render(stations, fuel, `${A.label} → ${B.label}`, detour, 0, 0, true);
+}
+
 async function run(fn) {
   try { await fn(); }
   catch (e) { setStatus("⚠️ " + e.message); }
 }
 
+let mode = "place";
+document.querySelectorAll(".mode").forEach((b) => b.addEventListener("click", () => {
+  mode = b.dataset.mode;
+  document.querySelectorAll(".mode").forEach((x) => x.classList.toggle("on", x === b));
+  const route = mode === "route";
+  $("rowPlace").hidden = route;
+  $("rowRadius").hidden = route;
+  $("rowRoute").hidden = !route;
+  $("rowDetour").hidden = !route;
+}));
+
 $("form").addEventListener("submit", (e) => {
   e.preventDefault();
+  if (mode === "route") {
+    const a = $("from").value.trim(), b = $("to").value.trim();
+    if (!a || !b) { setStatus("Saisissez un départ et une arrivée."); return; }
+    run(async () => {
+      setStatus("Localisation…");
+      const [A, B] = await Promise.all([geocode(a), geocode(b)]);
+      await searchRoute(A, B);
+    });
+    return;
+  }
   const q = $("place").value.trim();
   if (!q) { setStatus("Saisissez une ville ou un code postal."); return; }
   run(async () => {
