@@ -112,6 +112,10 @@
   .price { text-align: right; }
   .price strong { display: block; font-size: 1.6rem; color: var(--violet); }
   .price small { color: var(--muted); }
+  .station.best { border-left-color: var(--orange); box-shadow: 0 0 0 3px var(--orange), 0 8px 22px rgba(255, 159, 28, .35); background: #fffaf0; }
+  .badge { display: inline-block; margin-left: 6px; padding: 2px 10px; border-radius: 999px; background: var(--orange); color: #fff; font-size: .75rem; font-weight: 800; vertical-align: middle; }
+  .price .total { display: block; color: var(--muted); font-size: .82rem; }
+  #note { margin: 4px 4px 14px; color: var(--muted); font-size: .85rem; }
   footer { text-align: center; padding: 0 16px 40px; color: var(--muted); font-size: .9rem; }
   footer a { color: var(--violet); }
   @media (max-width: 520px) {
@@ -155,6 +159,7 @@
   </div>
 
   <div id="status" role="status" aria-live="polite"></div>
+  <p id="note" hidden></p>
   <ol id="results"></ol>
 </main>
 
@@ -167,6 +172,8 @@
 <script>
 const API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records";
 const GEO = "https://api-adresse.data.gouv.fr/search/";
+const TANK = 40; // litres du plein de référence
+const CONS = { gazole: 6, e10: 7, sp95: 7, sp98: 7, e85: 8.75, gplc: 8.5 }; // L/100 km
 const LABELS = { gazole: "Gazole", e10: "SP95-E10", sp95: "SP95", sp98: "SP98", e85: "E85", gplc: "GPLc" };
 
 const $ = (id) => document.getElementById(id);
@@ -189,25 +196,46 @@ async function search(lat, lon, label) {
   const radius = Number($("radius").value);
   const field = `${fuel}_prix`;
   const where = `within_distance(geom, geom'POINT(${lon} ${lat})', ${radius}km) and ${field} is not null`;
-  const url = `${API}?where=${encodeURIComponent(where)}&order_by=${field}&limit=30`;
+  const url = `${API}?where=${encodeURIComponent(where)}&order_by=${field}&limit=100`;
 
   setStatus("Recherche en cours…");
   resultsEl.replaceChildren();
+  $("note").hidden = true;
   const r = await fetch(url);
   if (!r.ok) throw new Error("L'API des carburants ne répond pas");
   const data = await r.json();
-  render(data.results || [], fuel, label, radius);
+  render(data.results || [], fuel, label, radius, lat, lon);
 }
 
-function render(stations, fuel, label, radius) {
+function km(lat1, lon1, lat2, lon2) {
+  const r = Math.PI / 180;
+  const a = Math.sin((lat2 - lat1) * r / 2) ** 2 +
+    Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(a));
+}
+
+function render(stations, fuel, label, radius, lat, lon) {
   if (!stations.length) {
     setStatus(`Aucune station ${LABELS[fuel]} trouvée dans ${radius} km autour de ${label}.`);
     return;
   }
-  setStatus(`${stations.length} stations les moins chères en ${LABELS[fuel]} autour de ${label}`);
-  stations.forEach((s, i) => {
+  // Coût = plein de 40 L + aller-retour jusqu'à la station (à vol d'oiseau)
+  stations.forEach((s) => {
+    s._km = s.geom ? km(lat, lon, s.geom.lat, s.geom.lon) : 0;
+    const price = Number(s[`${fuel}_prix`]);
+    s._cost = price * (TANK + 2 * s._km * CONS[fuel] / 100);
+  });
+  const best = stations.reduce((a, b) => (a._cost <= b._cost ? a : b));
+  const shown = stations.slice(0, 30);
+  if (!shown.includes(best)) shown.push(best);
+  setStatus(`${shown.length} stations en ${LABELS[fuel]} autour de ${label}`);
+  const note = $("note");
+  note.hidden = false;
+  note.textContent = `⭐ Meilleur rapport distance/prix : ${best.ville} (${best._km.toFixed(1).replace(".", ",")} km, ${best._cost.toFixed(2).replace(".", ",")} € pour un plein de ${TANK} L, trajet aller-retour inclus). Calcul à vol d'oiseau, consommation estimée à ${String(CONS[fuel]).replace(".", ",")} L/100 km.`;
+  shown.forEach((s) => {
+    const i = stations.indexOf(s);
     const li = document.createElement("li");
-    li.className = "station";
+    li.className = "station" + (s === best ? " best" : "");
 
     const rank = document.createElement("div");
     rank.className = "rank";
@@ -217,8 +245,14 @@ function render(stations, fuel, label, radius) {
     info.className = "info";
     const h = document.createElement("h3");
     h.textContent = `${s.ville || ""} (${s.cp || ""})`;
+    if (s === best) {
+      const b = document.createElement("span");
+      b.className = "badge";
+      b.textContent = "⭐ Meilleur rapport";
+      h.appendChild(b);
+    }
     const p = document.createElement("p");
-    p.textContent = s.adresse || "";
+    p.textContent = `${s.adresse || ""} · ${s._km.toFixed(1).replace(".", ",")} km`;
     info.append(h, p);
     const g = s.geom || (s.latitude != null ? { lat: s.latitude / 100000, lon: s.longitude / 100000 } : null);
     if (g) {
@@ -243,6 +277,10 @@ function render(stations, fuel, label, radius) {
       small.textContent = "Mis à jour le " + new Date(maj).toLocaleDateString("fr-FR");
       price.appendChild(small);
     }
+    const total = document.createElement("span");
+    total.className = "total";
+    total.textContent = `≈ ${s._cost.toFixed(2).replace(".", ",")} € le plein + trajet`;
+    price.appendChild(total);
 
     li.append(rank, info, price);
     resultsEl.appendChild(li);
