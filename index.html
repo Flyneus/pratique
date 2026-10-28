@@ -207,7 +207,41 @@ const resultsEl = $("results");
 
 function setStatus(msg) { statusEl.textContent = msg; }
 
+// Suggestions de communes (liste déroulante) : valeur affichée -> coordonnées exactes
+const picked = new Map();
+
+function suggest(input) {
+  const list = document.createElement("datalist");
+  list.id = `${input.id}List`;
+  document.body.appendChild(list);
+  input.setAttribute("list", list.id);
+  let timer;
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2 || picked.has(q)) return;
+    timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`${GEO}?q=${encodeURIComponent(q)}&type=municipality&limit=6`);
+        if (!r.ok) return;
+        const data = await r.json();
+        list.replaceChildren();
+        for (const f of data.features || []) {
+          const value = `${f.properties.city} (${f.properties.postcode})`;
+          picked.set(value, { lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], label: value });
+          const o = document.createElement("option");
+          o.value = value;
+          o.label = f.properties.context;
+          list.appendChild(o);
+        }
+      } catch (e) { /* pas de suggestions : la saisie libre reste possible */ }
+    }, 250);
+  });
+}
+["place", "from", "to"].forEach((id) => suggest($(id)));
+
 async function geocode(query) {
+  if (picked.has(query)) return picked.get(query);
   const r = await fetch(`${GEO}?q=${encodeURIComponent(query)}&limit=1`);
   if (!r.ok) throw new Error("Géocodage indisponible");
   const data = await r.json();
