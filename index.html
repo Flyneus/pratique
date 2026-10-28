@@ -131,16 +131,16 @@
   <div class="panel">
     <form id="form">
       <div class="row">
-        <input type="text" id="place" placeholder="Ville ou code postal (ex : Lyon, 33000)" autocomplete="off" aria-label="Ville ou code postal">
+        <input type="text" id="place" value="Quimper" placeholder="Ville ou code postal (ex : Lyon, 33000)" autocomplete="off" aria-label="Ville ou code postal">
         <button type="submit">Rechercher</button>
         <button type="button" class="alt" id="geo">📍 Autour de moi</button>
       </div>
       <div class="chips" role="radiogroup" aria-label="Carburant">
-        <label><input type="radio" name="fuel" value="gazole" checked><span>Gazole</span></label>
+        <label><input type="radio" name="fuel" value="gazole"><span>Gazole</span></label>
         <label><input type="radio" name="fuel" value="e10"><span>SP95-E10</span></label>
         <label><input type="radio" name="fuel" value="sp95"><span>SP95</span></label>
         <label><input type="radio" name="fuel" value="sp98"><span>SP98</span></label>
-        <label><input type="radio" name="fuel" value="e85"><span>E85</span></label>
+        <label><input type="radio" name="fuel" value="e85" checked><span>E85</span></label>
         <label><input type="radio" name="fuel" value="gplc"><span>GPLc</span></label>
       </div>
       <div class="row">
@@ -274,6 +274,9 @@ $("geo").addEventListener("click", () => {
     { timeout: 10000 }
   );
 });
+
+// Recherche par défaut au chargement
+$("form").requestSubmit();
 </script>
 </body>
 </html>
