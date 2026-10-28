@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prix Carburants – les stations les moins chères</title>
+<meta name="description" content="Trouvez le carburant le moins cher près de chez vous grâce aux données ouvertes du gouvernement.">
+<style>
+  :root {
+    --bg: #fff8ee;
+    --ink: #1d1a3a;
+    --card: #ffffff;
+    --pink: #ff4d8d;
+    --orange: #ff9f1c;
+    --teal: #12c2b0;
+    --violet: #6c4bff;
+    --muted: #6b6788;
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  header {
+    background: linear-gradient(135deg, var(--violet), var(--pink) 60%, var(--orange));
+    color: #fff;
+    padding: 56px 16px 90px;
+    text-align: center;
+    border-bottom-left-radius: 50% 30px;
+    border-bottom-right-radius: 50% 30px;
+  }
+  header h1 { margin: 0 0 8px; font-size: clamp(2rem, 6vw, 3.2rem); letter-spacing: -1px; }
+  header p { margin: 0 auto; max-width: 560px; opacity: .95; font-size: 1.1rem; }
+  main { max-width: 900px; margin: -56px auto 40px; padding: 0 16px; }
+  .panel {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: 0 12px 30px rgba(108, 75, 255, .18);
+  }
+  form { display: grid; gap: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  input[type=text], select {
+    flex: 1 1 200px;
+    padding: 14px 16px;
+    font-size: 1rem;
+    border: 2px solid #e6e1ff;
+    border-radius: 14px;
+    background: #fff;
+    color: var(--ink);
+  }
+  input:focus, select:focus { outline: none; border-color: var(--violet); }
+  button {
+    font: inherit;
+    font-weight: 700;
+    border: 0;
+    border-radius: 14px;
+    padding: 14px 22px;
+    cursor: pointer;
+    color: #fff;
+    background: var(--violet);
+    transition: transform .1s;
+  }
+  button:hover { transform: translateY(-2px); }
+  button.alt { background: var(--teal); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips label {
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: #f1eeff;
+    font-weight: 600;
+    border: 2px solid transparent;
+  }
+  .chips input { position: absolute; opacity: 0; pointer-events: none; }
+  .chips input:checked + span { color: #fff; }
+  .chips label:has(input:checked) { background: var(--pink); color: #fff; }
+  .chips label:has(input:focus-visible) { border-color: var(--ink); }
+  #status { margin: 22px 4px 8px; color: var(--muted); font-weight: 600; min-height: 1.5em; }
+  #results { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .station {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: 0 4px 14px rgba(29, 26, 58, .08);
+    border-left: 8px solid var(--violet);
+  }
+  .station:nth-child(1) { border-left-color: var(--teal); }
+  .station:nth-child(2) { border-left-color: var(--orange); }
+  .station:nth-child(3) { border-left-color: var(--pink); }
+  .rank {
+    width: 56px; height: 56px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 1.3rem; font-weight: 800; color: #fff;
+    background: var(--violet);
+  }
+  .station:nth-child(1) .rank { background: var(--teal); }
+  .station:nth-child(2) .rank { background: var(--orange); }
+  .station:nth-child(3) .rank { background: var(--pink); }
+  .info h3 { margin: 0; font-size: 1.05rem; }
+  .info p { margin: 2px 0 0; color: var(--muted); font-size: .92rem; }
+  .info a { color: var(--violet); font-weight: 600; text-decoration: none; }
+  .info a:hover { text-decoration: underline; }
+  .price { text-align: right; }
+  .price strong { display: block; font-size: 1.6rem; color: var(--violet); }
+  .price small { color: var(--muted); }
+  footer { text-align: center; padding: 0 16px 40px; color: var(--muted); font-size: .9rem; }
+  footer a { color: var(--violet); }
+  @media (max-width: 520px) {
+    .station { grid-template-columns: 44px 1fr; }
+    .rank { width: 44px; height: 44px; font-size: 1.05rem; }
+    .price { grid-column: 1 / -1; text-align: left; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>⛽ Prix Carburants</h1>
+  <p>Trouvez la station la moins chère près de chez vous, en temps quasi réel.</p>
+</header>
+
+<main>
+  <div class="panel">
+    <form id="form">
+      <div class="row">
+        <input type="text" id="place" placeholder="Ville ou code postal (ex : Lyon, 33000)" autocomplete="off" aria-label="Ville ou code postal">
+        <button type="submit">Rechercher</button>
+        <button type="button" class="alt" id="geo">📍 Autour de moi</button>
+      </div>
+      <div class="chips" role="radiogroup" aria-label="Carburant">
+        <label><input type="radio" name="fuel" value="gazole" checked><span>Gazole</span></label>
+        <label><input type="radio" name="fuel" value="e10"><span>SP95-E10</span></label>
+        <label><input type="radio" name="fuel" value="sp95"><span>SP95</span></label>
+        <label><input type="radio" name="fuel" value="sp98"><span>SP98</span></label>
+        <label><input type="radio" name="fuel" value="e85"><span>E85</span></label>
+        <label><input type="radio" name="fuel" value="gplc"><span>GPLc</span></label>
+      </div>
+      <div class="row">
+        <select id="radius" aria-label="Rayon de recherche">
+          <option value="5">Rayon : 5 km</option>
+          <option value="10" selected>Rayon : 10 km</option>
+          <option value="20">Rayon : 20 km</option>
+          <option value="50">Rayon : 50 km</option>
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <ol id="results"></ol>
+</main>
+
+<footer>
+  Données : <a href="https://www.data.gouv.fr/fr/datasets/prix-des-carburants-en-france-flux-instantane-v2-amelioree/" target="_blank" rel="noopener">Prix des carburants en France (data.economie.gouv.fr)</a>
+  · Géocodage : <a href="https://adresse.data.gouv.fr/" target="_blank" rel="noopener">Base Adresse Nationale</a>.
+  Les prix sont indicatifs.
+</footer>
+
+<script>
+const API = "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records";
+const GEO = "https://api-adresse.data.gouv.fr/search/";
+const LABELS = { gazole: "Gazole", e10: "SP95-E10", sp95: "SP95", sp98: "SP98", e85: "E85", gplc: "GPLc" };
+
+const $ = (id) => document.getElementById(id);
+const statusEl = $("status");
+const resultsEl = $("results");
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+async function geocode(query) {
+  const r = await fetch(`${GEO}?q=${encodeURIComponent(query)}&limit=1`);
+  if (!r.ok) throw new Error("Géocodage indisponible");
+  const data = await r.json();
+  const f = data.features && data.features[0];
+  if (!f) throw new Error("Lieu introuvable");
+  return { lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], label: f.properties.label };
+}
+
+async function search(lat, lon, label) {
+  const fuel = document.querySelector("input[name=fuel]:checked").value;
+  const radius = Number($("radius").value);
+  const field = `${fuel}_prix`;
+  const where = `within_distance(geom, geom'POINT(${lon} ${lat})', ${radius}km) and ${field} is not null`;
+  const url = `${API}?where=${encodeURIComponent(where)}&order_by=${field}&limit=30`;
+
+  setStatus("Recherche en cours…");
+  resultsEl.replaceChildren();
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("L'API des carburants ne répond pas");
+  const data = await r.json();
+  render(data.results || [], fuel, label, radius);
+}
+
+function render(stations, fuel, label, radius) {
+  if (!stations.length) {
+    setStatus(`Aucune station ${LABELS[fuel]} trouvée dans ${radius} km autour de ${label}.`);
+    return;
+  }
+  setStatus(`${stations.length} stations les moins chères en ${LABELS[fuel]} autour de ${label}`);
+  stations.forEach((s, i) => {
+    const li = document.createElement("li");
+    li.className = "station";
+
+    const rank = document.createElement("div");
+    rank.className = "rank";
+    rank.textContent = i + 1;
+
+    const info = document.createElement("div");
+    info.className = "info";
+    const h = document.createElement("h3");
+    h.textContent = `${s.ville || ""} (${s.cp || ""})`;
+    const p = document.createElement("p");
+    p.textContent = s.adresse || "";
+    info.append(h, p);
+    const g = s.geom || (s.latitude != null ? { lat: s.latitude / 100000, lon: s.longitude / 100000 } : null);
+    if (g) {
+      const a = document.createElement("a");
+      a.href = `https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}`;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "Itinéraire →";
+      const p2 = document.createElement("p");
+      p2.appendChild(a);
+      info.appendChild(p2);
+    }
+
+    const price = document.createElement("div");
+    price.className = "price";
+    const strong = document.createElement("strong");
+    strong.textContent = `${Number(s[`${fuel}_prix`]).toFixed(3).replace(".", ",")} €/L`;
+    price.appendChild(strong);
+    const maj = s[`${fuel}_maj`];
+    if (maj) {
+      const small = document.createElement("small");
+      small.textContent = "Mis à jour le " + new Date(maj).toLocaleDateString("fr-FR");
+      price.appendChild(small);
+    }
+
+    li.append(rank, info, price);
+    resultsEl.appendChild(li);
+  });
+}
+
+async function run(fn) {
+  try { await fn(); }
+  catch (e) { setStatus("⚠️ " + e.message); }
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = $("place").value.trim();
+  if (!q) { setStatus("Saisissez une ville ou un code postal."); return; }
+  run(async () => {
+    setStatus("Localisation…");
+    const p = await geocode(q);
+    await search(p.lat, p.lon, p.label);
+  });
+});
+
+$("geo").addEventListener("click", () => {
+  if (!navigator.geolocation) { setStatus("Géolocalisation non disponible."); return; }
+  setStatus("Localisation en cours…");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => run(() => search(pos.coords.latitude, pos.coords.longitude, "votre position")),
+    () => setStatus("Impossible d'obtenir votre position."),
+    { timeout: 10000 }
+  );
+});
+</script>
+</body>
+</html>
