@@ -13,15 +13,17 @@
 <meta name="apple-mobile-web-app-title" content="Carburants">
 <style>
   :root {
-    --bg: #f4f3ee;
-    --ink: #1c211e;
-    --muted: #5d655f;
-    --line: #d6d5cb;
+    --bg: #f8f4e8;
+    --ink: #1f2a24;
+    --muted: #66706a;
+    --line: #e5dfcc;
     --card: #ffffff;
-    --green: #0d5c3f;
-    --green-dark: #08422d;
-    --amber: #f5b700;
-    --amber-soft: #fff6d6;
+    --green: #14805a;
+    --green-dark: #0d5c3f;
+    --green-soft: #e3f2ea;
+    --amber: #f7b500;
+    --amber-soft: #fff3cc;
+    --shadow: 0 2px 10px rgba(31, 42, 36, .08);
   }
   * { box-sizing: border-box; }
   body {
@@ -31,74 +33,77 @@
     color: var(--ink);
     line-height: 1.5;
   }
-  header { background: var(--green); color: #fff; padding: 22px 16px; }
+  header { background: var(--green-dark); color: #fff; padding: 34px 16px 30px; border-bottom: 6px solid var(--amber); }
   .wrap { max-width: 860px; margin: 0 auto; }
-  header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -.2px; }
-  header p { margin: 2px 0 0; opacity: .85; font-size: .95rem; }
-  main { max-width: 860px; margin: 20px auto 40px; padding: 0 16px; }
-  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px; }
+  header h1 { margin: 0; font-size: clamp(1.7rem, 5vw, 2.3rem); font-weight: 800; letter-spacing: -.4px; }
+  header p { margin: 6px 0 0; opacity: .9; font-size: 1.05rem; }
+  main { max-width: 860px; margin: 22px auto 40px; padding: 0 16px; }
+  .panel { background: var(--card); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
   form { display: grid; gap: 14px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; }
   input[type=text], #range, select {
     flex: 1 1 200px;
-    padding: 11px 12px;
+    padding: 12px 14px;
     font: inherit;
-    border: 1px solid #b9b8ad;
-    border-radius: 6px;
-    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 10px;
+    background: #fffdf8;
     color: var(--ink);
   }
-  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+  input:focus, select:focus { outline: none; border-color: var(--green); }
+  button:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
   button {
     font: inherit;
-    font-weight: 600;
-    border: 1px solid var(--green);
-    border-radius: 6px;
-    padding: 11px 18px;
+    font-weight: 700;
+    border: 2px solid var(--green);
+    border-radius: 10px;
+    padding: 11px 20px;
     cursor: pointer;
     color: #fff;
     background: var(--green);
+    transition: background .15s, transform .1s;
   }
-  button:hover { background: var(--green-dark); }
-  button.alt, .mode { background: #fff; color: var(--green); }
-  button.alt:hover, .mode:hover { background: #eef3ef; }
-  .mode.on { background: var(--green); color: #fff; }
+  button:hover { background: var(--green-dark); border-color: var(--green-dark); transform: translateY(-1px); }
+  button.alt, .mode { background: #fff; color: var(--green-dark); }
+  button.alt:hover, .mode:hover { background: var(--green-soft); color: var(--green-dark); }
+  .mode.on { background: var(--green); border-color: var(--green); color: #fff; }
   .modes { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chips label { cursor: pointer; padding: 7px 14px; border-radius: 6px; background: #fff; border: 1px solid #b9b8ad; font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips label { cursor: pointer; padding: 8px 16px; border-radius: 999px; background: var(--green-soft); border: 2px solid transparent; font-weight: 700; color: var(--green-dark); }
   .chips input { position: absolute; opacity: 0; pointer-events: none; }
-  .chips label:has(input:checked) { background: var(--ink); border-color: var(--ink); color: #fff; }
-  .chips label:has(input:focus-visible) { outline: 2px solid var(--green); outline-offset: 1px; }
+  .chips label:has(input:checked) { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+  .chips label:has(input:focus-visible) { border-color: var(--ink); }
   .conso { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .conso input { width: 90px; padding: 11px 12px; font: inherit; border: 1px solid #b9b8ad; border-radius: 6px; }
-  #status { margin: 22px 2px 6px; color: var(--ink); font-weight: 600; min-height: 1.5em; }
+  .conso input { width: 90px; padding: 12px; font: inherit; border: 2px solid var(--line); border-radius: 10px; background: #fffdf8; }
+  #status { margin: 24px 2px 6px; color: var(--ink); font-weight: 700; font-size: 1.05rem; min-height: 1.5em; }
   #note { margin: 0 2px 14px; color: var(--muted); font-size: .88rem; }
-  #results { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
-  #results:empty { display: none; }
+  #results { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
   .station {
     display: grid;
-    grid-template-columns: 34px 1fr auto;
-    gap: 12px;
+    grid-template-columns: 38px 1fr auto;
+    gap: 14px;
     align-items: center;
     padding: 14px 16px;
-    border-bottom: 1px solid var(--line);
-    border-left: 4px solid transparent;
+    background: var(--card);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    border: 2px solid transparent;
   }
-  .station:last-child { border-bottom: 0; }
-  .rank { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .info h3 { margin: 0; font-size: 1rem; }
+  .rank { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: .95rem; }
+  .info h3 { margin: 0; font-size: 1.02rem; }
   .info p { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
-  .info a { color: var(--green); font-weight: 600; }
+  .info a { color: var(--green); font-weight: 700; }
   .price { text-align: right; font-variant-numeric: tabular-nums; }
-  .price strong { display: block; font-size: 1.35rem; color: var(--ink); }
+  .price strong { display: block; font-size: 1.4rem; color: var(--green-dark); }
   .price small, .price .total { display: block; color: var(--muted); font-size: .8rem; }
-  .station.best { background: var(--amber-soft); border-left-color: var(--amber); }
-  .badge { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 4px; background: var(--amber); color: var(--ink); font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; vertical-align: middle; }
+  .station.best { background: var(--amber-soft); border-color: var(--amber); }
+  .station.best .rank { background: var(--amber); color: var(--ink); }
+  .badge { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px; background: var(--amber); color: var(--ink); font-size: .72rem; font-weight: 800; vertical-align: middle; }
   [hidden] { display: none !important; }
   footer { max-width: 860px; margin: 0 auto; padding: 0 16px 40px; color: var(--muted); font-size: .85rem; }
-  footer a { color: var(--green); }
+  footer a { color: var(--green-dark); }
   @media (max-width: 520px) {
-    .station { grid-template-columns: 26px 1fr; }
+    .station { grid-template-columns: 34px 1fr; gap: 10px; }
     .price { grid-column: 2; text-align: left; }
   }
 </style>
