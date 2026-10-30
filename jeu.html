@@ -33,7 +33,7 @@
   }
   header h1 { margin: 0 0 6px; font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -1px; }
   header p { margin: 0 auto; max-width: 520px; opacity: .95; }
-  .back { display: inline-block; margin-bottom: 14px; color: #fff; font-weight: 600; text-decoration: none; opacity: .9; }
+  .back { display: inline-block; margin: 0 7px 14px; color: #fff; font-weight: 600; text-decoration: none; opacity: .9; }
   .back:hover { text-decoration: underline; }
   main { max-width: 560px; margin: -50px auto 40px; padding: 0 16px; }
   .panel { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: 0 12px 30px rgba(108, 75, 255, .18); }
@@ -51,6 +51,9 @@
   .cell:hover { transform: none; filter: brightness(.96); }
   .cell svg { width: 70%; height: 70%; }
   .cell.bad { box-shadow: inset 0 0 0 4px var(--pink); }
+  .opts { display: flex; gap: 8px; }
+  .auto { display: block; margin: 14px auto 0; max-width: 480px; font-size: .92rem; color: var(--muted); font-weight: 600; cursor: pointer; }
+  .ghost { opacity: .3; }
   #msg { margin: 16px 0 0; text-align: center; font-weight: 700; min-height: 1.5em; color: var(--muted); }
   #msg.win { color: var(--violet); font-size: 1.15rem; }
   details { margin-top: 14px; color: var(--muted); font-size: .92rem; }
@@ -60,7 +63,7 @@
 </head>
 <body>
 <header>
-  <a class="back" href="./">← Retour aux prix des carburants</a>
+  <a class="back" href="./">← Prix des carburants</a><a class="back" href="takuzu.html">Takuzu →</a>
   <h1>Miaoudoku</h1>
   <p>Pour patienter à la pompe : un chat par ligne, par colonne et par zone de couleur.</p>
 </header>
@@ -69,14 +72,21 @@
   <div class="panel">
     <div class="bar">
       <div class="stats"><span style="margin-left:0">Chats</span> <b id="count">0</b>/<b id="total">0</b> <span id="time">0:00</span></div>
-      <select id="size" aria-label="Taille de la grille">
-        <option value="5">5 × 5</option>
-        <option value="6" selected>6 × 6</option>
-        <option value="7">7 × 7</option>
-        <option value="8">8 × 8</option>
-      </select>
+      <div class="opts">
+        <select id="size" aria-label="Taille de la grille">
+          <option value="5">5 × 5</option>
+          <option value="6" selected>6 × 6</option>
+          <option value="7">7 × 7</option>
+          <option value="8">8 × 8</option>
+        </select>
+        <select id="level" aria-label="Difficulté">
+          <option value="easy" selected>Facile</option>
+          <option value="normal">Normal</option>
+        </select>
+      </div>
     </div>
     <div id="board" role="grid" aria-label="Grille de jeu"></div>
+    <label class="auto"><input type="checkbox" id="auto" checked> Croix automatiques autour des chats</label>
     <p id="msg" role="status" aria-live="polite"></p>
     <div class="bar" style="justify-content:center; margin:8px 0 0">
       <button id="newGame">Nouvelle grille</button>
@@ -163,13 +173,107 @@ function countSolutions(n, reg) {
   return count;
 }
 
+// Résout la grille comme un humain, sans jamais deviner. Renvoie true si les déductions suffisent.
+// Déductions : une seule case possible dans une ligne/colonne/zone ; k zones tenant dans k lignes (ou colonnes)
+// et l'inverse ; et, seulement si deep, une case écartée si y poser un chat laisse une ligne, colonne ou zone
+// sans aucune case (niveau Normal). Sans deep : niveau Facile.
+function logicSolvable(n, reg, deep = true) {
+  const N = n * n;
+  const rowOf = (i) => Math.floor(i / n), colOf = (i) => i % n;
+  const rows = [], cols = [], regs = [];
+  for (let k = 0; k < n; k++) { rows.push([]); cols.push([]); regs.push([]); }
+  for (let i = 0; i < N; i++) { rows[rowOf(i)].push(i); cols[colOf(i)].push(i); regs[reg[i]].push(i); }
+  const units = [rows, cols, regs];
+  const doneKey = ["rowDone", "colDone", "regDone"];
+
+  const place = (s, i) => {
+    const r = rowOf(i), c = colOf(i), g = reg[i];
+    s.rowDone[r] = s.colDone[c] = s.regDone[g] = 1;
+    s.placed++;
+    for (let j = 0; j < N; j++) {
+      if (!s.alive[j]) continue;
+      const rr = rowOf(j), cc = colOf(j);
+      if (rr === r || cc === c || reg[j] === g || (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1)) s.alive[j] = 0;
+    }
+  };
+  const clone = (s) => ({ alive: s.alive.slice(), rowDone: s.rowDone.slice(), colDone: s.colDone.slice(), regDone: s.regDone.slice(), placed: s.placed });
+  const dead = (s) => units.some((list, u) => list.some((cells, k) => !s[doneKey[u]][k] && !cells.some((i) => s.alive[i])));
+
+  const s = { alive: new Array(N).fill(1), rowDone: new Array(n).fill(0), colDone: new Array(n).fill(0), regDone: new Array(n).fill(0), placed: 0 };
+
+  const singles = () => {
+    let changed = false, again = true;
+    while (again) {
+      again = false;
+      for (let u = 0; u < 3; u++) {
+        for (let k = 0; k < n; k++) {
+          if (s[doneKey[u]][k]) continue;
+          const open = units[u][k].filter((i) => s.alive[i]);
+          if (open.length === 0) return null; // contradiction
+          if (open.length === 1) { place(s, open[0]); again = changed = true; }
+        }
+      }
+    }
+    return changed;
+  };
+
+  // k zones dont toutes les cases libres tiennent dans k lignes : ces lignes ne servent qu'à ces zones (et l'inverse)
+  const subsets = () => {
+    let changed = false;
+    for (const lines of [rows, cols]) {
+      const lineIdx = lines === rows ? rowOf : colOf;
+      const lineDone = lines === rows ? s.rowDone : s.colDone;
+      const ul = [], ug = [];
+      for (let k = 0; k < n; k++) { if (!lineDone[k]) ul.push(k); if (!s.regDone[k]) ug.push(k); }
+      for (let m = 1; m < (1 << ug.length) - 1; m++) { // zones -> lignes
+        const G = ug.filter((_, b) => (m >> b) & 1), L = new Set();
+        for (const g of G) for (const i of regs[g]) if (s.alive[i]) L.add(lineIdx(i));
+        if (L.size === G.length) {
+          for (const l of L) for (const i of lines[l]) if (s.alive[i] && !G.includes(reg[i])) { s.alive[i] = 0; changed = true; }
+        }
+      }
+      for (let m = 1; m < (1 << ul.length) - 1; m++) { // lignes -> zones
+        const Ls = ul.filter((_, b) => (m >> b) & 1), G = new Set();
+        for (const l of Ls) for (const i of lines[l]) if (s.alive[i]) G.add(reg[i]);
+        if (G.size === Ls.length) {
+          for (const g of G) for (const i of regs[g]) if (s.alive[i] && !Ls.includes(lineIdx(i))) { s.alive[i] = 0; changed = true; }
+        }
+      }
+    }
+    return changed;
+  };
+
+  // une case est écartée si y poser un chat laisse une ligne, colonne ou zone sans aucune case possible
+  const lookahead = () => {
+    let changed = false;
+    for (let i = 0; i < N; i++) {
+      if (!s.alive[i]) continue;
+      const t = clone(s);
+      place(t, i);
+      if (dead(t)) { s.alive[i] = 0; changed = true; }
+    }
+    return changed;
+  };
+
+  while (s.placed < n) {
+    const a = singles();
+    if (a === null) return false;
+    if (s.placed >= n) break;
+    if (a) continue;
+    if (subsets()) continue;
+    if (deep && lookahead()) continue;
+    return false; // plus aucune déduction possible : il faudrait deviner
+  }
+  return true;
+}
+
 // Cherche jusqu'à obtenir une grille à solution unique, par tranches de ~30 ms pour ne pas figer l'écran
-async function generate(n, isCurrent) {
+async function generate(n, deep, isCurrent) {
   let sliceStart = Date.now();
   while (true) {
     const q = randomQueens(n);
     const reg = growRegions(n, q);
-    if (countSolutions(n, reg) === 1) return { q, reg };
+    if (countSolutions(n, reg) === 1 && logicSolvable(n, reg, deep)) return { q, reg };
     if (Date.now() - sliceStart > 30) {
       await new Promise((r) => setTimeout(r));
       if (!isCurrent()) return null;
@@ -186,7 +290,7 @@ async function newGame() {
   finished = true; // pas de saisie pendant la création
   $("msg").className = "";
   $("msg").textContent = "Création de la grille…";
-  const g = await generate(size, () => token === gameToken);
+  const g = await generate(size, $("level").value === "normal", () => token === gameToken);
   if (!g) return; // une demande plus récente a pris le relais
   n = size;
   region = g.reg;
@@ -243,9 +347,19 @@ function conflicts() {
 
 function update() {
   const { cats, bad } = conflicts();
+  // Cases que les chats posés rendent impossibles, affichées en croix pâle si l'option est cochée
+  const attacked = new Set();
+  if ($("auto").checked) {
+    for (const c of cats) {
+      for (let j = 0; j < n * n; j++) {
+        const dr = Math.abs(Math.floor(c / n) - Math.floor(j / n)), dc = Math.abs((c % n) - (j % n));
+        if (j !== c && (dr === 0 || dc === 0 || region[c] === region[j] || Math.max(dr, dc) === 1)) attacked.add(j);
+      }
+    }
+  }
   document.querySelectorAll(".cell").forEach((el) => {
     const i = Number(el.dataset.i);
-    el.innerHTML = state[i] === 2 ? CAT : state[i] === 1 ? "×" : "";
+    el.innerHTML = state[i] === 2 ? CAT : state[i] === 1 ? "×" : attacked.has(i) ? '<span class="ghost">×</span>' : "";
     el.classList.toggle("bad", bad.has(i));
     el.setAttribute("aria-label", state[i] === 2 ? "chat" : state[i] === 1 ? "croix" : "vide");
   });
@@ -278,6 +392,8 @@ function win() {
 
 $("newGame").addEventListener("click", newGame);
 $("size").addEventListener("change", newGame);
+$("level").addEventListener("change", newGame);
+$("auto").addEventListener("change", update);
 $("reset").addEventListener("click", () => {
   if (finished) return;
   state.fill(0);

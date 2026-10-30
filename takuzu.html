@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Takuzu – des 0 et des 1 en attendant à la pompe</title>
+<meta name="description" content="Remplissez la grille de 0 et de 1 : jamais trois identiques à la suite, autant de 0 que de 1 par ligne et par colonne.">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#6c4bff">
+<style>
+  :root {
+    --bg: #fff8ee;
+    --ink: #1d1a3a;
+    --card: #ffffff;
+    --pink: #ff4d8d;
+    --orange: #ff9f1c;
+    --teal: #12c2b0;
+    --violet: #6c4bff;
+    --muted: #6b6788;
+    --radius: 20px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.5; }
+  header {
+    background: linear-gradient(135deg, var(--violet), var(--pink) 60%, var(--orange));
+    color: #fff;
+    padding: 40px 16px 80px;
+    text-align: center;
+    border-bottom-left-radius: 50% 30px;
+    border-bottom-right-radius: 50% 30px;
+  }
+  header h1 { margin: 0 0 6px; font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -1px; }
+  header p { margin: 0 auto; max-width: 520px; opacity: .95; }
+  .back { display: inline-block; margin: 0 7px 14px; color: #fff; font-weight: 600; text-decoration: none; opacity: .9; }
+  .back:hover { text-decoration: underline; }
+  main { max-width: 560px; margin: -50px auto 40px; padding: 0 16px; }
+  .panel { background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: 0 12px 30px rgba(108, 75, 255, .18); }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .bar .stats { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .opts { display: flex; gap: 8px; }
+  select, button { font: inherit; border-radius: 14px; }
+  select { padding: 10px 12px; border: 2px solid #e6e1ff; background: #fff; color: var(--ink); }
+  button { font-weight: 700; border: 0; padding: 10px 18px; cursor: pointer; color: #fff; background: var(--violet); transition: transform .1s; }
+  button:hover { transform: translateY(-2px); }
+  button.alt { background: var(--teal); }
+  button:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+  #board { display: grid; gap: 4px; width: 100%; max-width: 480px; margin: 0 auto; touch-action: manipulation; user-select: none; }
+  .cell { aspect-ratio: 1; padding: 0; display: grid; place-items: center; border-radius: 10px; font-size: clamp(1rem, 5.5vw, 1.8rem); font-weight: 800; background: #f1eeff; color: var(--ink); }
+  .cell:hover { transform: none; filter: brightness(.97); }
+  .cell.v0 { background: var(--violet); color: #fff; }
+  .cell.v1 { background: var(--orange); color: #fff; }
+  .cell.given { cursor: default; }
+  .cell.given.v0 { background: #d9d1ff; color: var(--ink); }
+  .cell.given.v1 { background: #ffe3b8; color: var(--ink); }
+  .cell.bad { box-shadow: inset 0 0 0 4px var(--pink); }
+  #msg { margin: 16px 0 0; text-align: center; font-weight: 700; min-height: 1.5em; color: var(--muted); }
+  #msg.win { color: var(--violet); font-size: 1.15rem; }
+  details { margin-top: 14px; color: var(--muted); font-size: .92rem; }
+  summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  details ul { margin: 8px 0 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="./">← Prix des carburants</a><a class="back" href="jeu.html">Miaoudoku →</a>
+  <h1>Takuzu</h1>
+  <p>Des 0 et des 1 pour patienter à la pompe : pas plus de deux identiques à la suite.</p>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="bar">
+      <div class="stats">Temps <span id="time">0:00</span></div>
+      <div class="opts">
+        <select id="size" aria-label="Taille de la grille">
+          <option value="4">4 × 4</option>
+          <option value="6" selected>6 × 6</option>
+          <option value="8">8 × 8</option>
+        </select>
+        <select id="level" aria-label="Difficulté">
+          <option value="0.45">Facile</option>
+          <option value="0.6" selected>Normal</option>
+          <option value="1">Difficile</option>
+        </select>
+      </div>
+    </div>
+    <div id="board" role="grid" aria-label="Grille de jeu"></div>
+    <p id="msg" role="status" aria-live="polite"></p>
+    <div class="bar" style="justify-content:center; margin:8px 0 0">
+      <button id="newGame">Nouvelle grille</button>
+      <button id="hint" class="alt">Indice</button>
+      <button id="reset" class="alt">Effacer</button>
+    </div>
+    <details>
+      <summary>Règles</summary>
+      <ul>
+        <li>Remplissez chaque case avec un <b>0</b> ou un <b>1</b>.</li>
+        <li>Pas plus de <b>deux</b> chiffres identiques côte à côte, en ligne comme en colonne.</li>
+        <li>Chaque ligne et chaque colonne contient <b>autant de 0 que de 1</b>.</li>
+        <li>Deux lignes ne peuvent pas être identiques, ni deux colonnes.</li>
+        <li>Touchez une case : 0, puis 1, puis vide. Les cases d'origine sont verrouillées.</li>
+        <li>Les cases qui enfreignent une règle sont entourées de rose.</li>
+      </ul>
+    </details>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const rand = (k) => Math.floor(Math.random() * k);
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+let n, solution, given, state, started, timer, finished = true, token = 0;
+
+function linesOf(n) {
+  const lines = [];
+  for (let r = 0; r < n; r++) lines.push(Array.from({ length: n }, (_, c) => r * n + c));
+  for (let c = 0; c < n; c++) lines.push(Array.from({ length: n }, (_, r) => r * n + c));
+  return lines;
+}
+
+// Déductions forcées (paires, cases encadrées, lignes déjà pleines). Renvoie false si la grille est contradictoire.
+function propagate(g, n) {
+  const half = n / 2, lines = linesOf(n);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const L of lines) {
+      let c0 = 0, c1 = 0;
+      for (const i of L) { if (g[i] === 0) c0++; else if (g[i] === 1) c1++; }
+      if (c0 > half || c1 > half) return false;
+      if ((c0 === half || c1 === half) && c0 + c1 < n) {
+        const fill = c0 === half ? 1 : 0;
+        for (const i of L) if (g[i] < 0) { g[i] = fill; changed = true; }
+      }
+      for (let k = 0; k < n; k++) {
+        const a = g[L[k]];
+        if (a < 0) continue;
+        if (k + 1 < n && g[L[k + 1]] === a) {
+          for (const j of [k - 1, k + 2]) {
+            if (j < 0 || j >= n) continue;
+            const v = g[L[j]];
+            if (v === a) return false;
+            if (v < 0) { g[L[j]] = 1 - a; changed = true; }
+          }
+        }
+        if (k + 2 < n && g[L[k + 2]] === a) {
+          const m = L[k + 1];
+          if (g[m] === a) return false;
+          if (g[m] < 0) { g[m] = 1 - a; changed = true; }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+function distinctLines(g, n) {
+  const seen = new Set();
+  linesOf(n).forEach((L, k) => {
+    seen.add((k < n ? "r" : "c") + L.map((i) => g[i]).join(""));
+  });
+  return seen.size === 2 * n; // aucune ligne ni colonne en double
+}
+
+function count(g, n, limit = 2) {
+  const h = g.slice();
+  if (!propagate(h, n)) return 0;
+  const e = h.indexOf(-1);
+  if (e < 0) return distinctLines(h, n) ? 1 : 0;
+  let total = 0;
+  for (const v of [0, 1]) {
+    const h2 = h.slice();
+    h2[e] = v;
+    total += count(h2, n, limit);
+    if (total >= limit) break;
+  }
+  return total;
+}
+
+function solveRandom(g, n) {
+  if (!propagate(g, n)) return null;
+  const e = g.indexOf(-1);
+  if (e < 0) return distinctLines(g, n) ? g : null;
+  for (const v of shuffle([0, 1])) {
+    const h = g.slice();
+    h[e] = v;
+    const r = solveRandom(h, n);
+    if (r) return r;
+  }
+  return null;
+}
+
+// Vrai si les règles simples suffisent à remplir toute la grille, sans jamais deviner
+// (une grille ainsi résolue n'a forcément qu'une solution)
+function solvedByRules(p, n) {
+  const h = p.slice();
+  return propagate(h, n) && h.indexOf(-1) < 0 && distinctLines(h, n);
+}
+
+// Part d'une grille complète puis retire des cases tant que la grille reste faisable sans deviner
+function makePuzzle(n, fraction) {
+  let sol = null;
+  while (!sol) sol = solveRandom(new Array(n * n).fill(-1), n);
+  const p = sol.slice();
+  const target = Math.floor(n * n * fraction);
+  let removed = 0;
+  for (const i of shuffle([...Array(n * n).keys()])) {
+    if (removed >= target) break;
+    const saved = p[i];
+    p[i] = -1;
+    if (solvedByRules(p, n)) removed++; else p[i] = saved;
+  }
+  return { p, sol };
+}
+
+function conflicts() {
+  const bad = new Set(), half = n / 2;
+  const lines = linesOf(n);
+  const complete = [];
+  for (const L of lines) {
+    let c0 = 0, c1 = 0;
+    for (const i of L) { if (state[i] === 0) c0++; else if (state[i] === 1) c1++; }
+    for (let k = 0; k + 2 < n; k++) {
+      const a = state[L[k]];
+      if (a >= 0 && state[L[k + 1]] === a && state[L[k + 2]] === a) { bad.add(L[k]); bad.add(L[k + 1]); bad.add(L[k + 2]); }
+    }
+    for (const v of [0, 1]) {
+      if ((v === 0 ? c0 : c1) > half) for (const i of L) if (state[i] === v) bad.add(i);
+    }
+    if (c0 + c1 === n) complete.push(L);
+  }
+  for (let a = 0; a < complete.length; a++) {
+    for (let b = a + 1; b < complete.length; b++) {
+      const A = complete[a], B = complete[b];
+      const sameFamily = (A[1] === A[0] + 1) === (B[1] === B[0] + 1);
+      if (sameFamily && A.every((i, k) => state[i] === state[B[k]])) { A.forEach((i) => bad.add(i)); B.forEach((i) => bad.add(i)); }
+    }
+  }
+  return bad;
+}
+
+async function newGame() {
+  const mine = ++token;
+  const size = Number($("size").value), fraction = Number($("level").value);
+  clearInterval(timer);
+  finished = true;
+  $("msg").className = "";
+  $("msg").textContent = "Création de la grille…";
+  await new Promise((r) => setTimeout(r, 20)); // laisse le message s'afficher
+  const { p, sol } = makePuzzle(size, fraction);
+  if (mine !== token) return;
+  n = size;
+  solution = sol;
+  given = p.map((v) => v >= 0);
+  state = p.slice();
+  finished = false;
+  started = null;
+  $("time").textContent = "0:00";
+  $("msg").textContent = "";
+  build();
+  update();
+}
+
+function build() {
+  const b = $("board");
+  b.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+  b.replaceChildren();
+  for (let i = 0; i < n * n; i++) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "cell";
+    el.dataset.i = i;
+    el.addEventListener("click", () => tap(i));
+    b.appendChild(el);
+  }
+}
+
+function update() {
+  const bad = conflicts();
+  document.querySelectorAll(".cell").forEach((el) => {
+    const i = Number(el.dataset.i), v = state[i];
+    el.className = "cell" + (v >= 0 ? " v" + v : "") + (given[i] ? " given" : "") + (bad.has(i) ? " bad" : "");
+    el.textContent = v >= 0 ? v : "";
+    el.setAttribute("aria-label", v >= 0 ? String(v) + (given[i] ? " (fixe)" : "") : "vide");
+  });
+  if (!finished && state.every((v) => v >= 0) && bad.size === 0) win();
+}
+
+function startTimer() {
+  if (!started) { started = Date.now(); timer = setInterval(tick, 500); }
+}
+
+function tap(i) {
+  if (finished || given[i]) return;
+  startTimer();
+  state[i] = state[i] === 1 ? -1 : state[i] + 1; // vide -> 0 -> 1 -> vide
+  update();
+}
+
+function tick() {
+  const s = Math.floor((Date.now() - started) / 1000);
+  $("time").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function win() {
+  finished = true;
+  clearInterval(timer);
+  if (started) tick();
+  $("msg").className = "win";
+  $("msg").textContent = `Bravo ! Grille résolue en ${$("time").textContent}.`;
+}
+
+$("newGame").addEventListener("click", newGame);
+$("size").addEventListener("change", newGame);
+$("level").addEventListener("change", newGame);
+$("reset").addEventListener("click", () => {
+  if (finished) return;
+  state = state.map((v, i) => (given[i] ? v : -1));
+  update();
+});
+$("hint").addEventListener("click", () => {
+  if (finished) return;
+  const wrong = [];
+  state.forEach((v, i) => { if (!given[i] && v !== solution[i]) wrong.push(i); });
+  if (!wrong.length) return;
+  startTimer();
+  const i = wrong[rand(wrong.length)];
+  state[i] = solution[i];
+  update();
+});
+
+newGame();
+</script>
+</body>
+</html>
