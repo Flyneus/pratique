@@ -163,21 +163,32 @@ function countSolutions(n, reg) {
   return count;
 }
 
-function generate(n) {
-  let last;
-  const t0 = Date.now();
-  while (Date.now() - t0 < 1500) {
+// Cherche jusqu'à obtenir une grille à solution unique, par tranches de ~30 ms pour ne pas figer l'écran
+async function generate(n, isCurrent) {
+  let sliceStart = Date.now();
+  while (true) {
     const q = randomQueens(n);
     const reg = growRegions(n, q);
-    last = { q, reg };
-    if (countSolutions(n, reg) === 1) return last;
+    if (countSolutions(n, reg) === 1) return { q, reg };
+    if (Date.now() - sliceStart > 30) {
+      await new Promise((r) => setTimeout(r));
+      if (!isCurrent()) return null;
+      sliceStart = Date.now();
+    }
   }
-  return last; // à défaut de grille unique, une grille jouable reste valide
 }
 
-function newGame() {
-  n = Number($("size").value);
-  const g = generate(n);
+let gameToken = 0;
+async function newGame() {
+  const token = ++gameToken;
+  const size = Number($("size").value);
+  clearInterval(timer);
+  finished = true; // pas de saisie pendant la création
+  $("msg").className = "";
+  $("msg").textContent = "Création de la grille…";
+  const g = await generate(size, () => token === gameToken);
+  if (!g) return; // une demande plus récente a pris le relais
+  n = size;
   region = g.reg;
   solution = g.q;
   state = new Array(n * n).fill(0); // 0 vide, 1 croix, 2 chat
